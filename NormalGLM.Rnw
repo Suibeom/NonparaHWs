@@ -1,0 +1,219 @@
+\documentclass{article}
+
+\begin{document}
+\SweaveOpts{concordance=TRUE}
+\setkeys{Gin}{width=1.0\textwidth} 
+
+\title{NormalGLM Assigment}
+\author{Nicholas Cahill}
+\maketitle
+\section*{Part a}
+After loading our data and normal linear model, we'll look at the significance of the quadratic term.
+<<>>=
+load("~/Downloads/rstuff/Normal_GLM.Rdata")
+xsq = x^2
+fit = lm(y~x+xsq)
+summary(fit)
+@
+
+Looking at the results of the automatic Z-test, we can conclude that the quadratic term is significant.
+\newpage
+Let's look at the residuals:
+\begin{center}
+<<fig=TRUE,echo=FALSE>>=
+sigsq = sum(fit$residuals^2)/47
+plot(fit$residuals)
+points(sqrt(sigsq)*replicate(50,1),pch="-")
+points(sqrt(sigsq)*replicate(50,-1),pch="-")
+@
+\end{center}
+It looks good, since there are lots of points within the +/- 1 stdev bars...
+But actually there are too many points within the bars. We should only have ~70\% between the bars!
+~30\% of the points SHOULD be outside the bars, but only 7 of 50 (14\%) points are outside the bars. Furthermore, all of the points outside are for small or large x-values.
+
+\section*{Part b}
+<<echo=FALSE>>=
+source("./Normal_GLM.r")
+D2l=function(b)  {D2lik(b[1:3],b[4:6],y,model.matrix(fit),model.matrix(fit))}
+Dl=function(b)  {Dlik(b[1:3],b[4:6],y,model.matrix(fit),model.matrix(fit))}
+l=function(b)  {lik(b[1:3],b[4:6],y,model.matrix(fit),model.matrix(fit))}
+@
+<<>>=
+b_1 = fit$coefficients/sigsq
+b_2 = c(1/sigsq,0,0)
+b = c(b_1,b_2)
+bHlin = b
+@
+Looking at the code, we see that $\beta_1 X1 = \eta_1$ and $\beta_2 X2 = \eta_2$. This would be useful if we decided to use different covariates for $\eta_1$ and $\eta_2$, but for our purposes, $X1$ and $X2$ are the same.
+<<>>=
+lik(b_1,b_2,y,model.matrix(fit),model.matrix(fit))
+Dlik(b_1,b_2,y,model.matrix(fit),model.matrix(fit))
+@
+
+Looking at the gradient, we can see that it's very very small in the $\beta_1$ directions. This makes sense, because we just optimized those guys with $lm$... So the gradient is telling us that to improve log likelihood right now, we should change the $\beta_2$ coefficients a lot and not change the $\beta_1$ coeffficients much. First-order methods are shortsighted, and obviously the $\beta_1$ will have to change as soon as we start messing with $\beta_2$...
+
+\section*{Part c}
+<<echo=FALSE>>=
+load("../NGLMdats")
+@
+Source code for fitting the model is in GLMfragmentEXTRA.R, for now the fits were computed and saved to be used for this report.
+
+<<>>=
+b = bH2
+eta1 = model.matrix(fit)%*%b[1:3] #\eta_{1,i} = X_i*\beta_1
+eta2 = model.matrix(fit)%*%b[4:6] #\eta_{2,i} = X_i*\beta_2
+@
+
+\begin{center}
+<<fig=TRUE,echo=FALSE>>=
+plot(x,y,main="Data versus fitted values")
+points(x,fit$fitted.values,col="red")
+points(x,eta1/eta2, col="green")
+text(0.15,y=14,"y",col="black")
+text(0.15,y=13.2,"GLM",col="green")
+text(0.15,y=12.4,"lm",col="red")
+@
+
+<<fig=TRUE, echo=FALSE>>=
+plot(x,y - eta1/eta2,main="Residuals from the GLM")
+lines(x,sqrt(1/eta2))
+lines(x,-sqrt(1/eta2))
+@
+\end{center}
+
+\section*{Part d}
+
+To test the hypotheses given, we fit new models and compute their log-liklihood.
+
+Then $-2(ll(H_0) - ll(H))$ should be distributed according to a chi-squared distribution, with degrees of freedom equal to the dimension of the space of models satisfying the hypotheses.
+
+First hypothesis, $\eta1$ has quadratic term equal to zero. This gives us $q=5$
+
+\begin{center}
+
+<<>>=
+bH0
+@
+
+<<fig=TRUE,echo=FALSE>>=
+plot.ecdf(BBH0, main="Empirical test statistic for H0, and chisq(5)")
+xa = (0:10000)/100
+lines(xa, pchisq(xa,5), col='red')
+abline(v=(2*(l(bH2)-l(bH0))), col='green')
+abline(h=0.95)
+text(0.0,0.9,c("p=0.95"))
+text(2*(l(bH2)-l(bH0)),0.05,2*(l(bH2)-l(bH0)), adj=c(0,0))
+@
+<<>>=
+mean(BBH0 > 2*(l(bH2)-l(bH0))) # Empirical p-value
+pchisq(2*(l(bH2)-l(bH0)),5,lower.tail = FALSE) # Chi squared p-value
+@
+
+\end{center}
+
+The chi-squared test would tell us soundly to reject this hypothesis, but the empirical distribution puts us right on the line! I wouldn't reject.
+
+\newpage
+
+Next hypothesis, $\eta2$ has quadratic term equal to zero. This gives us $q=5$ again
+
+<<>>=
+bH1
+@
+
+<<fig=TRUE,echo=FALSE>>=
+plot.ecdf(BBH1, main="Empirical test statistic for H1, and chisq(5)",xlim=c(-2,80))
+xa = (0:10000)/100
+lines(xa, pchisq(xa,5), col='red')
+abline(v=(2*(l(bH2)-l(bH1))), col='green')
+abline(h=0.95)
+text(0.0,0.9,c("p=0.95"))
+text(2*(l(bH2)-l(bH1)),0.05,2*(l(bH2)-l(bH1)), adj=c(1,0))
+@
+
+<<>>=
+mean(BBH1 > 2*(l(bH2)-l(bH1))) # Empirical p-value
+pchisq(2*(l(bH2)-l(bH1)),5,lower.tail = FALSE) # Chi squared p-value
+@
+
+
+The variable $BBH1$ has 10,000 simulations of the test statistic from the hypothesis we are testing. The test above shows that our real statistic is more extreme than all of them, so p<0.0001
+
+In either case, we can safely reject this hypothesis.
+
+
+Next hypothesis, equal variances. This gives us $q=4$, since we are losing all by the intercept for $\eta2$
+<<>>=
+bHlin
+@
+
+<<fig=TRUE,echo=FALSE>>=
+plot.ecdf(BBlin, main="Empirical test statistic for Hlin, and chisq(4)",xlim=c(-2,80))
+xa = (0:10000)/100
+lines(xa, pchisq(xa,4), col='red')
+abline(v=(2*(l(bH2)-l(bHlin))), col='green')
+abline(h=0.95)
+text(0.0,0.9,c("p=0.95"))
+text(2*(l(bH2)-l(bHlin)),0.05,2*(l(bH2)-l(bHlin)), adj=c(1,0))
+@
+
+<<>>=
+mean(BBlin > 2*(l(bH2)-l(bHlin))) # Empirical p-value
+pchisq(2*(l(bH2)-l(bHlin)),4,lower.tail = FALSE) # Chi squared p-value
+@
+
+The variable $BBlin$ has 10,000 simulations of the test statistic, so the test above shows that once again our real statistic is more extreme than all of the simulated statistics, giving p<0.0001
+
+So, once again, we can reject this hypothesis.
+
+\section*{e}
+For completeness, here's the full code I used to run my simulations. The vector $bH2$ contains the fitted GLM $beta$ values.
+
+<<>>=
+yt = (c(1.0,0.75,0.75^2)%*%bH2[1:3])/(c(1.0,0.75,0.75^2)%*%bH2[4:6])
+N=1000
+ysims1 = vector("numeric",N)
+sigsims = vector("numeric",N)
+ysims2 = vector("numeric",N)
+for(i in 1:N){
+  #First, simulate data:
+  #N(m,s) = m + \sqrt(s)N(0,1)
+  n  = rnorm(50)
+  sim = eta1/eta2 + sqrt(1/eta2)*n
+  #Set up the gradient functions so we can fit the GLM
+  D2ls=function(b)  {D2lik(b[1:3],b[4:6],sim,model.matrix(fit),model.matrix(fit))}
+  Dls=function(b)  {Dlik(b[1:3],b[4:6],sim,model.matrix(fit),model.matrix(fit))}
+  ls=function(b)  {lik(b[1:3],b[4:6],sim,model.matrix(fit),model.matrix(fit))}
+  h_ms=function(b){-solve(D2ls(b))%*%Dls(b)}
+  #Intialize values for fitting
+  b=c(b_1,b_2)
+  h=h_ms(b)
+  del=1
+  #Fit with Newton-Raphson
+  while(del>10^-35){
+    while(is.nan(ls(b+h))||ls(b+h)<ls(b)){
+      h = h/2
+    }
+    del = ls(b+h)-ls(b)
+    b = b+h
+    h = h_ms(b)
+  }
+  bH0=b
+  #Collect the just-fitted model's prediction at x=0.75
+  ysims1[i] = (c(1.0,0.75,0.75^2)%*%bH0[1:3])/(c(1.0,0.75,0.75^2)%*%bH0[4:6])
+  sigsims[i]=(c(1.0,0.75,0.75^2))%*%(1/bH0[4:6])
+  #and the standard linear model's prediction, too
+  ysims2[i] = c(1.0,0.75,0.75^2)%*%lm(sim~x+xsq)$coefficients
+}
+mean(ysims1-yt)
+sd(ysims1-yt)
+#~0.016 and ~0.122
+mean(ysims2-yt)
+sd(ysims2-yt)
+#~0.695 and ~0.127
+@
+
+The linear model is highly biased, but has roughly the same variance. Interpreting these standard deviation numbers along with the fact that the 'true' y is 4.883219, we have a 68\% chance of being less than 2.5\% off, and a 95\% chance of being less than 5\% off. Not too bad!
+
+
+\end{document}
